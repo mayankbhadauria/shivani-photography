@@ -1,0 +1,23 @@
+S3PhotoService class: Service for managing photography images in AWS S3
+
+init: Initialize service with client and bucket configuration
+
+test_connection: Test S3 bucket connection and accessibility
+
+get_all_images: Retrieve all images from S3 originals folder with thumbnail generation
+
+process_image_info: Process S3 object metadata and ensure thumbnail exists
+
+check_thumbnail_exists: Verify if thumbnail image exists in S3 bucket
+
+create_thumbnail: Generate and upload 300x300 thumbnail from original image
+
+upload_image: Upload new image file to S3 originals folder with unique filename
+
+is_image_file: Validate if S3 object is an image file by extension
+
+root: API root endpoint with basic information
+
+health_check: Health check endpoint to verify S3 connectivity
+
+get_images: Fetch all portfolio images with thumbnails from S3
