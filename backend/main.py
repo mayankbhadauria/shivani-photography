@@ -122,11 +122,15 @@ class S3PhotoService:
             unique_filename = f"{uuid.uuid4().hex}_{filename}"
             original_key = f"originals/{unique_filename}"
 
+            mime_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+                        'gif': 'image/gif', 'bmp': 'image/bmp', 'webp': 'image/webp'}
+            content_type = mime_map.get(file_extension, f'image/{file_extension}')
+
             self.s3_client.put_object(
                 Bucket=self.bucket_name,
                 Key=original_key,
                 Body=file_content,
-                ContentType=f'image/{file_extension}'
+                ContentType=content_type
             )
 
             return {
