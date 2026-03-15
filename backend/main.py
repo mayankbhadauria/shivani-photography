@@ -30,6 +30,10 @@ app = FastAPI(
 # Update CORS for production
 CORS_ORIGINS = [
     "http://localhost:3000",  # Local development
+    "http://shivyank.com",
+    "https://shivyank.com",
+    "http://www.shivyank.com",
+    "https://www.shivyank.com",
     "http://shivani-photography-website-1765593468.s3-website-us-east-1.amazonaws.com",
     "https://*.amazonaws.com",  # CloudFront
     "https://*.s3-website-us-east-1.amazonaws.com",
