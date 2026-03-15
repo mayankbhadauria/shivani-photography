@@ -37,6 +37,11 @@ This builds the Lambda package, deploys to Lambda, builds the React frontend, sy
 - Frontend uploads files **directly to S3** via presigned URLs — bypasses API Gateway's 10MB limit
 - Frontend refreshes gallery after upload
 
+**Delete flow:**
+- Gallery shows a 🗑 Delete button on the currently viewed image
+- Clicking confirms then calls `DELETE /api/images/{key}`
+- Backend deletes the object from S3; frontend removes it from state immediately
+
 **Frontend → Backend flow:**
 - `services/api.js` — Axios client; reads `REACT_APP_API_URL` from env (`.env` = localhost, `.env.production` = API Gateway URL)
 - On load: `GET /api/health` checks S3 connectivity, `GET /api/images` fetches all portfolio images
