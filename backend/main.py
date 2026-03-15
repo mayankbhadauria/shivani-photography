@@ -188,6 +188,30 @@ async def get_images():
         raise HTTPException(status_code=500, detail=f"Error fetching images: {str(e)}")
 
 
+@app.post("/api/presigned-upload")
+async def get_presigned_urls(request: dict):
+    try:
+        files = request.get("files", [])
+        urls = []
+        for f in files:
+            filename = f.get("filename", "")
+            content_type = f.get("content_type", "image/jpeg")
+            if not photo_service.is_image_file(filename):
+                continue
+            file_extension = filename.split('.')[-1].lower()
+            unique_filename = f"{uuid.uuid4().hex}_{filename}"
+            key = f"originals/{unique_filename}"
+            presigned_url = s3_client.generate_presigned_url(
+                'put_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': key, 'ContentType': content_type},
+                ExpiresIn=300
+            )
+            urls.append({'filename': filename, 'key': key, 'url': presigned_url, 'content_type': content_type})
+        return {"urls": urls}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate presigned URLs: {str(e)}")
+
+
 @app.post("/api/bulk-upload")
 async def bulk_upload_images(files: List[UploadFile] = File(...)):
     try:
