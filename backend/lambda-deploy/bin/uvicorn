@@ -1,4 +1,4 @@
-#!/Users/mayankbhadauria/Documents/Projects/shivani-photography/backend/venv/bin/python3
+#!/Library/Developer/CommandLineTools/usr/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
