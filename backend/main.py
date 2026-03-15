@@ -212,6 +212,15 @@ async def get_presigned_urls(request: dict):
         raise HTTPException(status_code=500, detail=f"Failed to generate presigned URLs: {str(e)}")
 
 
+@app.delete("/api/images/{image_key:path}")
+async def delete_image(image_key: str):
+    try:
+        s3_client.delete_object(Bucket=BUCKET_NAME, Key=image_key)
+        return {"status": "deleted", "key": image_key}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete image: {str(e)}")
+
+
 @app.post("/api/bulk-upload")
 async def bulk_upload_images(files: List[UploadFile] = File(...)):
     try:
