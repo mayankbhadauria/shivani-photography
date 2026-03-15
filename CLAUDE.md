@@ -23,25 +23,11 @@ bash deploy_lambda.sh        # Package zip (does NOT deploy — see below)
 ```
 
 ### Deploying
-The `deploy_lambda.sh` script only builds the zip. To fully deploy:
+Run from `backend/` to deploy everything in one step:
 ```bash
-# 1. Copy main.py into lambda-deploy and rezip
-cp backend/main.py backend/lambda-deploy/main.py
-cd backend/lambda-deploy && zip -r9 deployment.zip . && cd ../..
-
-# 2. Push to Lambda
-aws lambda update-function-code \
-  --function-name shivani-photography-api \
-  --zip-file fileb://backend/lambda-deploy/deployment.zip \
-  --region us-east-1
-
-# 3. Build and deploy frontend
-cd frontend && npm run build
-aws s3 sync build s3://shivani-photography-website-1765593468 --delete
-
-# 4. Invalidate CloudFront cache
-aws cloudfront create-invalidation --distribution-id E1NWD0ZPJOTN29 --paths "/*"
+bash deploy_lambda.sh
 ```
+This builds the Lambda package, deploys to Lambda, builds the React frontend, syncs to S3, and invalidates the CloudFront cache.
 
 ## Architecture
 
