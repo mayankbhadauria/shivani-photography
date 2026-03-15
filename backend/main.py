@@ -56,11 +56,12 @@ BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 
 logger.info(f"Connecting to S3 bucket: {BUCKET_NAME} in region: {AWS_REGION}")
 
-# Initialize S3 client
+# Initialize S3 client — use explicit keys locally, rely on IAM role in Lambda
 s3_client = boto3.client(
     's3',
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    aws_access_key_id=AWS_ACCESS_KEY_ID or None,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY or None,
+    aws_session_token=os.getenv("AWS_SESSION_TOKEN") or None,
     region_name=AWS_REGION
 )
 
