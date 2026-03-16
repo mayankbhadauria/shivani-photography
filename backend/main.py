@@ -1,5 +1,5 @@
 import sys
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -9,6 +9,7 @@ from typing import List
 import uuid
 from dotenv import load_dotenv
 import logging
+from auth import require_admin, require_any_authenticated
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -176,7 +177,7 @@ async def health_check():
 
 
 @app.get("/api/images")
-async def get_images():
+async def get_images(user: dict = Depends(require_any_authenticated)):
     try:
         images = photo_service.get_all_images()
         return {
@@ -189,7 +190,7 @@ async def get_images():
 
 
 @app.post("/api/presigned-upload")
-async def get_presigned_urls(request: dict):
+async def get_presigned_urls(request: dict, user: dict = Depends(require_admin)):
     try:
         files = request.get("files", [])
         urls = []
@@ -213,7 +214,7 @@ async def get_presigned_urls(request: dict):
 
 
 @app.delete("/api/images/{image_key:path}")
-async def delete_image(image_key: str):
+async def delete_image(image_key: str, user: dict = Depends(require_admin)):
     try:
         s3_client.delete_object(Bucket=BUCKET_NAME, Key=image_key)
         return {"status": "deleted", "key": image_key}
@@ -222,7 +223,7 @@ async def delete_image(image_key: str):
 
 
 @app.post("/api/bulk-upload")
-async def bulk_upload_images(files: List[UploadFile] = File(...)):
+async def bulk_upload_images(files: List[UploadFile] = File(...), user: dict = Depends(require_admin)):
     try:
         results = []
         successful_uploads = 0

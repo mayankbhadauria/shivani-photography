@@ -1,3 +1,5 @@
+python-jose[cryptography]==3.3.0
+requests==2.32.3
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.0

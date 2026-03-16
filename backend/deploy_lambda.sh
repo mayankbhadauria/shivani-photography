@@ -13,6 +13,7 @@ cd lambda-deploy
 
 cp ../main.py ./main.py
 cp ../lambda_function.py .
+cp ../auth.py .
 
 pip install --target . \
     fastapi==0.68.0 \
@@ -23,6 +24,8 @@ pip install --target . \
     starlette==0.14.2 \
     pydantic==1.8.2 \
     typing-extensions \
+    "python-jose[cryptography]==3.3.0" \
+    requests==2.32.3 \
     --no-deps -q
 
 rm -rf boto3* botocore* s3transfer*
