@@ -1,0 +1,4 @@
+backend/lambda-deploy/
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
