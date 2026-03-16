@@ -1,5 +1,6 @@
 import os
-import requests
+import json
+import urllib.request
 from functools import lru_cache
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -16,9 +17,8 @@ security = HTTPBearer()
 
 @lru_cache(maxsize=1)
 def get_jwks():
-    response = requests.get(JWKS_URL, timeout=10)
-    response.raise_for_status()
-    return response.json()
+    with urllib.request.urlopen(JWKS_URL, timeout=10) as resp:
+        return json.loads(resp.read().decode())
 
 
 def decode_token(token: str) -> dict:

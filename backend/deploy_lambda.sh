@@ -24,8 +24,11 @@ pip install --target . \
     starlette==0.14.2 \
     pydantic==1.8.2 \
     typing-extensions \
-    "python-jose[cryptography]==3.3.0" \
-    requests==2.32.3 \
+    python-jose==3.3.0 \
+    rsa==4.9 \
+    ecdsa==0.19.0 \
+    pyasn1==0.6.1 \
+    six==1.16.0 \
     --no-deps -q
 
 rm -rf boto3* botocore* s3transfer*
