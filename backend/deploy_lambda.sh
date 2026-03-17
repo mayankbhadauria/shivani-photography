@@ -31,6 +31,13 @@ pip install --target . \
     six==1.16.0 \
     --no-deps -q
 
+# Pillow must be installed with Linux wheels to work on Lambda (Amazon Linux 2)
+pip install --target . \
+    --platform manylinux2014_x86_64 \
+    --python-version 39 \
+    --only-binary=:all: \
+    Pillow -q
+
 rm -rf boto3* botocore* s3transfer*
 find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 zip -r9 deployment.zip . -x "*.pyc" > /dev/null

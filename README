@@ -1,23 +1,43 @@
-S3PhotoService class: Service for managing photography images in AWS S3
+Shivani Photography — shivyank.com
+===================================
 
-init: Initialize service with client and bucket configuration
+A private photography portfolio app. React SPA frontend + FastAPI backend on AWS Lambda.
+Authenticated via AWS Cognito. Images stored in S3, served via CloudFront CDN.
 
-test_connection: Test S3 bucket connection and accessibility
+## Stack
 
-get_all_images: Retrieve all images from S3 originals folder with thumbnail generation
+- Frontend: React (Create React App), styled-components, Axios, amazon-cognito-identity-js
+- Backend: FastAPI (Python 3.9), Mangum (Lambda adapter), Pillow, boto3
+- Infrastructure: AWS Lambda, API Gateway, S3 (images + website hosting), CloudFront, Cognito
 
-process_image_info: Process S3 object metadata and ensure thumbnail exists
+## Quick start
 
-check_thumbnail_exists: Verify if thumbnail image exists in S3 bucket
+### Frontend
+  cd frontend
+  npm start          # dev server at localhost:3000
 
-create_thumbnail: Generate and upload 300x300 thumbnail from original image
+### Backend
+  cd backend
+  source venv/bin/activate
+  uvicorn main:app --reload   # dev server at localhost:8000
 
-upload_image: Upload new image file to S3 originals folder with unique filename
+### Deploy everything
+  cd backend
+  bash deploy_lambda.sh
 
-is_image_file: Validate if S3 object is an image file by extension
+This builds the Lambda zip (with Pillow Linux wheel), deploys to Lambda,
+builds the React frontend, syncs to S3, and invalidates CloudFront.
 
-root: API root endpoint with basic information
+## Key Features
 
-health_check: Health check endpoint to verify S3 connectivity
+- Cognito login (3 roles: Admin / Downloader / Viewer)
+- 10-minute inactivity auto sign-out; 401 responses also trigger sign-out
+- Upload via S3 presigned URLs (bypasses API Gateway 10 MB limit)
+- Server-side thumbnail (400×267) + display (1200×800) image generation via Pillow
+- EXIF auto-rotation on all resized images
+- Latest-uploaded images first (offset-based pagination, sorted by LastModified)
+- 60-second in-memory metadata cache (invalidated on upload/delete)
+- All images served via CloudFront with 1-year Cache-Control headers
+- Admin-only: upload, delete, stats, S3 connection status
 
-get_images: Fetch all portfolio images with thumbnails from S3
+## See CLAUDE.md for full architecture details.

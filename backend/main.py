@@ -7,6 +7,7 @@ import io
 import os
 from typing import List
 import uuid
+import time
 from dotenv import load_dotenv
 import logging
 from auth import require_admin, require_any_authenticated
@@ -54,6 +55,11 @@ AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+CLOUDFRONT_BASE_URL = os.getenv("CLOUDFRONT_BASE_URL", "https://shivyank.com")
+
+# Module-level metadata cache — avoids re-listing S3 on every request
+_objects_cache = {"data": None, "ts": 0}
+CACHE_TTL = 60  # seconds
 
 logger.info(f"Connecting to S3 bucket: {BUCKET_NAME} in region: {AWS_REGION}")
 
@@ -80,46 +86,128 @@ class S3PhotoService:
             logger.error(f"S3 Connection Error: {e}")
             return False
 
-    def get_all_images(self):
-        try:
-            response = self.s3_client.list_objects_v2(
-                Bucket=self.bucket_name,
-                Prefix='originals/',
-                MaxKeys=100
-            )
+    def get_all_objects_sorted(self, force_refresh=False):
+        """Fetch originals + check which thumbnails/display images exist — all in 3 LIST calls.
+        Results are cached in memory for CACHE_TTL seconds."""
+        global _objects_cache
+        now = time.time()
+        if not force_refresh and _objects_cache["data"] is not None and (now - _objects_cache["ts"]) < CACHE_TTL:
+            return _objects_cache["data"]
 
-            images = []
+        def list_keys(prefix):
+            keys = set()
+            kwargs = {'Bucket': self.bucket_name, 'Prefix': prefix}
+            while True:
+                resp = self.s3_client.list_objects_v2(**kwargs)
+                for obj in resp.get('Contents', []):
+                    if not obj['Key'].endswith('/') and obj['Size'] > 0:
+                        keys.add(obj['Key'].split('/')[-1])
+                if not resp.get('IsTruncated'):
+                    break
+                kwargs['ContinuationToken'] = resp['NextContinuationToken']
+            return keys
+
+        thumb_keys = list_keys('thumbnails/')
+        disp_keys = list_keys('display/')
+
+        all_objects = []
+        kwargs = {'Bucket': self.bucket_name, 'Prefix': 'originals/'}
+        while True:
+            response = self.s3_client.list_objects_v2(**kwargs)
             if 'Contents' in response:
                 for obj in response['Contents']:
                     if self.is_image_file(obj['Key']) and obj['Size'] > 0:
-                        image_info = self.process_image_info(obj)
-                        if image_info:
-                            images.append(image_info)
+                        fname = obj['Key'].split('/')[-1]
+                        obj['_has_thumb'] = fname in thumb_keys
+                        obj['_has_display'] = fname in disp_keys
+                        all_objects.append(obj)
+            if not response.get('IsTruncated'):
+                break
+            kwargs['ContinuationToken'] = response['NextContinuationToken']
 
-            images.sort(key=lambda x: x['last_modified'], reverse=True)
-            return images
+        all_objects.sort(key=lambda o: o['LastModified'], reverse=True)
+        _objects_cache["data"] = all_objects
+        _objects_cache["ts"] = now
+        return all_objects
 
+    def invalidate_cache(self):
+        global _objects_cache
+        _objects_cache["data"] = None
+        _objects_cache["ts"] = 0
+
+    def get_images_page(self, limit=10, offset=0, force_refresh=False):
+        try:
+            all_objects = self.get_all_objects_sorted(force_refresh=force_refresh)
+            page = all_objects[offset:offset + limit]
+            images = [info for obj in page for info in [self.process_image_info(obj)] if info]
+            has_more = (offset + limit) < len(all_objects)
+            return {
+                'images': images,
+                'has_more': has_more,
+                'next_offset': offset + limit if has_more else None
+            }
         except Exception as e:
             logger.error(f"Error fetching images: {e}")
-            return []
+            return {'images': [], 'has_more': False, 'next_offset': None}
+
+    def thumbnail_key(self, original_key):
+        filename = original_key.split('/')[-1]
+        return f"thumbnails/{filename}"
 
     def process_image_info(self, s3_object):
         try:
             original_key = s3_object['Key']
-            # For now, use original as thumbnail (no processing)
-            base_url = f"https://{self.bucket_name}.s3.{AWS_REGION}.amazonaws.com"
-
+            fname = original_key.split('/')[-1]
+            has_thumb = s3_object.get('_has_thumb', False)
+            has_display = s3_object.get('_has_display', False)
             return {
-                'id': original_key.split('/')[-1],
-                'original': f"{base_url}/{original_key}",
-                'thumbnail': f"{base_url}/{original_key}",  # Same as original for now
+                'id': fname,
+                'original': f"{CLOUDFRONT_BASE_URL}/{original_key}",
+                'display': f"{CLOUDFRONT_BASE_URL}/display/{fname}" if has_display else f"{CLOUDFRONT_BASE_URL}/{original_key}",
+                'thumbnail': f"{CLOUDFRONT_BASE_URL}/thumbnails/{fname}" if has_thumb else f"{CLOUDFRONT_BASE_URL}/{original_key}",
                 'last_modified': s3_object['LastModified'].isoformat(),
                 'size': s3_object['Size'],
                 'key': original_key
             }
-
         except Exception as e:
             logger.error(f"Error processing image info: {e}")
+            return None
+
+    def display_key(self, original_key):
+        filename = original_key.split('/')[-1]
+        return f"display/{filename}"
+
+    def _resize_and_upload(self, original_key, dest_key, max_size, quality):
+        """Shared resize logic: download original, auto-rotate via EXIF, resize, upload to dest_key."""
+        from PIL import Image, ImageOps
+        response = self.s3_client.get_object(Bucket=self.bucket_name, Key=original_key)
+        img = Image.open(io.BytesIO(response['Body'].read()))
+        img = ImageOps.exif_transpose(img)  # respect EXIF rotation (phone photos)
+        img = img.convert('RGB')
+        img.thumbnail(max_size, Image.LANCZOS)
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=quality, optimize=True)
+        buffer.seek(0)
+        self.s3_client.put_object(
+            Bucket=self.bucket_name, Key=dest_key, Body=buffer,
+            ContentType='image/jpeg', CacheControl='public, max-age=31536000, immutable'
+        )
+        return dest_key
+
+    def generate_thumbnail(self, original_key):
+        """400×267px thumbnail for the strip."""
+        try:
+            return self._resize_and_upload(original_key, self.thumbnail_key(original_key), (400, 267), 85)
+        except Exception as e:
+            logger.error(f"Thumbnail generation failed for {original_key}: {e}")
+            return None
+
+    def generate_display_image(self, original_key):
+        """1200×800px display image for the carousel — ~10x smaller than raw originals."""
+        try:
+            return self._resize_and_upload(original_key, self.display_key(original_key), (1200, 800), 82)
+        except Exception as e:
+            logger.error(f"Display image generation failed for {original_key}: {e}")
             return None
 
     def upload_image(self, file_content, filename):
@@ -177,12 +265,18 @@ async def health_check():
 
 
 @app.get("/api/images")
-async def get_images(user: dict = Depends(require_any_authenticated)):
+async def get_images(
+    limit: int = 10,
+    offset: int = 0,
+    user: dict = Depends(require_any_authenticated)
+):
     try:
-        images = photo_service.get_all_images()
+        result = photo_service.get_images_page(limit=limit, offset=offset)
         return {
-            "images": images,
-            "count": len(images),
+            "images": result['images'],
+            "count": len(result['images']),
+            "has_more": result['has_more'],
+            "next_token": result['next_offset'],
             "bucket": BUCKET_NAME
         }
     except Exception as e:
@@ -205,7 +299,7 @@ async def get_presigned_urls(request: dict, user: dict = Depends(require_admin))
             presigned_url = s3_client.generate_presigned_url(
                 'put_object',
                 Params={'Bucket': BUCKET_NAME, 'Key': key, 'ContentType': content_type},
-                ExpiresIn=300
+                ExpiresIn=900
             )
             urls.append({'filename': filename, 'key': key, 'url': presigned_url, 'content_type': content_type})
         return {"urls": urls}
@@ -217,9 +311,44 @@ async def get_presigned_urls(request: dict, user: dict = Depends(require_admin))
 async def delete_image(image_key: str, user: dict = Depends(require_admin)):
     try:
         s3_client.delete_object(Bucket=BUCKET_NAME, Key=image_key)
+        for derived_key in [photo_service.thumbnail_key(image_key), photo_service.display_key(image_key)]:
+            try:
+                s3_client.delete_object(Bucket=BUCKET_NAME, Key=derived_key)
+            except Exception:
+                pass
+        photo_service.invalidate_cache()
         return {"status": "deleted", "key": image_key}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete image: {str(e)}")
+
+
+@app.post("/api/process-thumbnails")
+async def process_thumbnails(request: dict, user: dict = Depends(require_admin)):
+    """Generate thumbnails + display images for a list of original keys after presigned upload."""
+    try:
+        keys = request.get("keys", [])
+        results = []
+        for key in keys:
+            thumb_key = photo_service.generate_thumbnail(key)
+            disp_key = photo_service.generate_display_image(key)
+            # Set Cache-Control on the original too
+            try:
+                head = photo_service.s3_client.head_object(Bucket=photo_service.bucket_name, Key=key)
+                ct = head.get('ContentType', 'image/jpeg')
+                photo_service.s3_client.copy_object(
+                    Bucket=photo_service.bucket_name, Key=key,
+                    CopySource={'Bucket': photo_service.bucket_name, 'Key': key},
+                    MetadataDirective='REPLACE', ContentType=ct,
+                    CacheControl='public, max-age=31536000, immutable'
+                )
+            except Exception as e:
+                logger.warning(f"Cache-Control update failed for {key}: {e}")
+            results.append({"key": key, "thumbnail": thumb_key, "display": disp_key,
+                            "success": thumb_key is not None and disp_key is not None})
+        photo_service.invalidate_cache()
+        return {"processed": len(results), "results": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Thumbnail processing failed: {str(e)}")
 
 
 @app.post("/api/bulk-upload")
