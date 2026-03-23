@@ -64,7 +64,7 @@ _cat_cache = {}   # per-category cache: {category: {"data": [...], "ts": 0}}
 CACHE_TTL = 60    # seconds
 
 VALID_CATEGORIES = ["maternity", "family-kids", "brand-shoot", "creative-portrait"]
-HIGHLIGHT_SLOTS  = ["hero", "about", "contact"]
+HIGHLIGHT_SLOTS  = ["hero", "about", "contact", "login"]
 
 logger.info(f"Connecting to S3 bucket: {BUCKET_NAME} in region: {AWS_REGION}")
 
@@ -613,6 +613,17 @@ async def get_highlights(user: dict = Depends(require_any_authenticated)):
         return photo_service.get_highlights()
     except Exception as e:
         raise HTTPException(500, f"Failed to fetch highlights: {str(e)}")
+
+
+@app.get("/api/login-bg")
+async def get_login_bg():
+    """Public endpoint — no auth required. Returns the login page background image URL."""
+    key = "gallery/highlights/login.jpg"
+    try:
+        s3_client.head_object(Bucket=BUCKET_NAME, Key=key)
+        return {"url": f"{CLOUDFRONT_BASE_URL}/{key}"}
+    except Exception:
+        return {"url": None}
 
 
 @app.get("/api/highlights/{slot}/presigned")
