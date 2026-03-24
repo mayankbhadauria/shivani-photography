@@ -35,12 +35,12 @@ CORS_ORIGINS = [
     "http://localhost:3000",  # Local development
     "http://shivyank.com",
     "https://shivyank.com",
-    "http://www.shivyank.com",
-    "https://www.shivyank.com",
+    "https://shivanijadonphotography.com",
+    "https://www.shivanijadonphotography.com",
     "http://shivani-photography-website-1765593468.s3-website-us-east-1.amazonaws.com",
-    "https://*.amazonaws.com",  # CloudFront
+    "https://*.amazonaws.com",
     "https://*.s3-website-us-east-1.amazonaws.com",
-    "https://*.cloudfront.net"  # CloudFront alternative domains
+    "https://*.cloudfront.net"
 ]
 
 app.add_middleware(
