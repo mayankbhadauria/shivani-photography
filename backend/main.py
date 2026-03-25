@@ -63,7 +63,7 @@ _objects_cache = {"data": None, "ts": 0}
 _cat_cache = {}   # per-category cache: {category: {"data": [...], "ts": 0}}
 CACHE_TTL = 60    # seconds
 
-VALID_CATEGORIES = ["maternity", "family-kids", "brand-shoot", "creative-portrait"]
+VALID_CATEGORIES = ["maternity", "newborn", "family-portraits", "brands", "events"]
 HIGHLIGHT_SLOTS  = ["hero", "about", "contact", "login", "portrait-session", "standard-session", "reservation-hero"]
 
 logger.info(f"Connecting to S3 bucket: {BUCKET_NAME} in region: {AWS_REGION}")
@@ -604,6 +604,22 @@ async def reprocess_category_display(
         return {"processed": len(results), "succeeded": succeeded, "failed": len(results) - succeeded}
     except Exception as e:
         raise HTTPException(500, f"Reprocess failed: {str(e)}")
+
+
+@app.get("/api/gallery/brands-and-events")
+async def get_brands_and_events(
+    limit: int = 20, user: dict = Depends(require_any_authenticated)
+):
+    """Returns brands images then events images in one response for the combined gallery page."""
+    try:
+        brands_result = photo_service.get_category_page("brands", limit=limit, offset=0)
+        events_result = photo_service.get_category_page("events", limit=limit, offset=0)
+        return {
+            "brands": brands_result["images"],
+            "events": events_result["images"],
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Error fetching brands & events: {str(e)}")
 
 
 @app.delete("/api/gallery/{category}/{filename:path}")
