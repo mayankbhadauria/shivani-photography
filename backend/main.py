@@ -64,7 +64,7 @@ _cat_cache = {}   # per-category cache: {category: {"data": [...], "ts": 0}}
 CACHE_TTL = 60    # seconds
 
 VALID_CATEGORIES = ["maternity", "family-kids", "brand-shoot", "creative-portrait"]
-HIGHLIGHT_SLOTS  = ["hero", "about", "contact", "login"]
+HIGHLIGHT_SLOTS  = ["hero", "about", "contact", "login", "portrait-session", "standard-session"]
 
 logger.info(f"Connecting to S3 bucket: {BUCKET_NAME} in region: {AWS_REGION}")
 
