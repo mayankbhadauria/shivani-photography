@@ -277,7 +277,7 @@ class S3PhotoService:
         try:
             fname    = original_key.split('/')[-1]
             dest_key = f"gallery/{category}/display/{fname}"
-            return self._resize_and_upload(original_key, dest_key, (1200, 800), 82)
+            return self._resize_and_upload(original_key, dest_key, (2400, 1600), 92)
         except Exception as e:
             logger.error(f"Category display failed for {original_key}: {e}")
             return None
@@ -322,9 +322,9 @@ class S3PhotoService:
             return None
 
     def generate_display_image(self, original_key):
-        """1200×800px display image for the carousel — ~10x smaller than raw originals."""
+        """2400×1600px display image — high quality for retina screens."""
         try:
-            return self._resize_and_upload(original_key, self.display_key(original_key), (1200, 800), 82)
+            return self._resize_and_upload(original_key, self.display_key(original_key), (2400, 1600), 92)
         except Exception as e:
             logger.error(f"Display image generation failed for {original_key}: {e}")
             return None
@@ -583,6 +583,27 @@ async def process_category_thumbnails(
         return {"processed": len(results), "results": results}
     except Exception as e:
         raise HTTPException(500, f"Thumbnail processing failed: {str(e)}")
+
+
+@app.post("/api/gallery/{category}/reprocess-display")
+async def reprocess_category_display(
+    category: str, user: dict = Depends(require_admin)
+):
+    """Regenerate display images for ALL originals in a category at current quality settings."""
+    if category not in VALID_CATEGORIES:
+        raise HTTPException(400, "Invalid category")
+    try:
+        all_objects = photo_service.get_category_objects(category, force_refresh=True)
+        results = []
+        for obj in all_objects:
+            original_key = obj['Key']
+            disp_key = photo_service.generate_category_display(category, original_key)
+            results.append({"key": original_key, "display": disp_key, "success": disp_key is not None})
+        photo_service.invalidate_category_cache(category)
+        succeeded = sum(1 for r in results if r["success"])
+        return {"processed": len(results), "succeeded": succeeded, "failed": len(results) - succeeded}
+    except Exception as e:
+        raise HTTPException(500, f"Reprocess failed: {str(e)}")
 
 
 @app.delete("/api/gallery/{category}/{filename:path}")
