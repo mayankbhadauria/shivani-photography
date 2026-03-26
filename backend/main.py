@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="Shivani Photography API",
+    title="Shivani Jadon Photography API",
     description="Photography portfolio API deployed on AWS Lambda",
     version="1.0.0",
     # Add these for Lambda deployment
@@ -374,7 +374,7 @@ photo_service = S3PhotoService()
 
 @app.get("/")
 async def root():
-    return {"message": "Shivani Photography API", "version": "1.0.0"}
+    return {"message": "Shivani Jadon Photography API", "version": "1.0.0"}
 
 
 @app.get("/api/health")
