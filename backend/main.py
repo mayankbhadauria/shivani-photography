@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 import io
+import json
 from typing import List
 import uuid
 import time
@@ -681,3 +682,40 @@ async def get_highlight_presigned(slot: str, user: dict = Depends(require_admin)
         return {"slot": slot, "key": key, "url": presigned_url}
     except Exception as e:
         raise HTTPException(500, f"Failed to generate presigned URL: {str(e)}")
+
+# ══════════════════════════════════════════════════════════════════════
+#  CATEGORY VISIBILITY CONFIG
+# ══════════════════════════════════════════════════════════════════════
+
+VISIBILITY_KEY = "gallery/config/visibility.json"
+PORTFOLIO_CATEGORIES = ["maternity", "newborn", "family-portraits", "brands-and-events"]
+
+
+def _read_visibility():
+    try:
+        obj = s3_client.get_object(Bucket=BUCKET_NAME, Key=VISIBILITY_KEY)
+        return json.loads(obj['Body'].read())
+    except Exception:
+        return {cat: True for cat in PORTFOLIO_CATEGORIES}
+
+
+def _write_visibility(data: dict):
+    s3_client.put_object(
+        Bucket=BUCKET_NAME,
+        Key=VISIBILITY_KEY,
+        Body=json.dumps(data),
+        ContentType='application/json',
+    )
+
+
+@app.get("/api/config/visibility")
+async def get_visibility(user: dict = Depends(require_any_authenticated)):
+    return _read_visibility()
+
+
+@app.put("/api/config/visibility")
+async def update_visibility(body: dict, user: dict = Depends(require_admin)):
+    # Only accept keys that are valid portfolio categories
+    cleaned = {k: bool(v) for k, v in body.items() if k in PORTFOLIO_CATEGORIES}
+    _write_visibility(cleaned)
+    return cleaned
